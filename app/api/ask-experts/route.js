@@ -1,12 +1,6 @@
 // /app/api/ask-experts/route.js
 import { expertModels } from '@/lib/models';
 
-const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
-
-if (!HUGGINGFACE_API_KEY) {
-  throw new Error('HUGGINGFACE_API_KEY is required');
-}
-
 export async function POST(request) {
   try {
     const { question } = await request.json();
@@ -16,43 +10,38 @@ export async function POST(request) {
 
     const promises = expertModels.map(async (model) => {
       try {
-        const payload = {
-          inputs: [
-            { role: 'system', content: model.systemPrompt },
-            { role: 'user', content: question.trim() }
-          ],
-          parameters: {
-            max_new_tokens: 800,
-            temperature: 0.6,
-            return_full_text: false
-          }
-        };
-
-        const res = await fetch(model.endpoint.trim(), {
+        const res = await fetch(model.endpoint, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
             'Content-Type': 'application/json'
+            // لا حاجة لمفتاح — Phi-3 يدعم الطلبات المفتوحة
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({
+            inputs: [
+              { role: 'system', content: model.systemPrompt },
+              { role: 'user', content: question.trim() }
+            ],
+            parameters: {
+              max_new_tokens: 800,
+              temperature: 0.7,
+              return_full_text: false
+            }
+          })
         });
 
         if (!res.ok) {
           const errorText = await res.text();
-          console.error('API Error:', errorText);
-          throw new Error('فشل في الاتصال بالنموذج');
+          throw new Error(`فشل: ${res.status}`);
         }
 
         const data = await res.json();
         let answer = '';
-
-        if (Array.isArray(data) && data[0]?.generated_text) {
-          answer = data[0].generated_text;
-        } else if (typeof data === 'object' && data.generated_text) {
+        if (Array.isArray(data)) {
+          answer = data[0]?.generated_text || '';
+        } else if (data.generated_text) {
           answer = data.generated_text;
         }
-
-        answer = answer.trim();
+        answer = answer.replace(/.*?<\|im_end\|>/g, '').trim();
 
         return {
           id: model.id,
@@ -75,7 +64,6 @@ export async function POST(request) {
     const responses = await Promise.all(promises);
     return Response.json({ expertResponses: responses }, { status: 200 });
   } catch (error) {
-    console.error('Server error:', error);
     return Response.json({ error: 'فشل في معالجة الطلب' }, { status: 500 });
   }
 }
