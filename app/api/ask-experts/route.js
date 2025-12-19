@@ -1,12 +1,6 @@
 // /app/api/ask-experts/route.js
 import { expertModels } from '@/lib/models';
 
-const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
-
-if (!HUGGINGFACE_API_KEY) {
-  throw new Error('HUGGINGFACE_API_KEY is required in .env');
-}
-
 export async function POST(request) {
   try {
     const { question } = await request.json();
@@ -17,51 +11,37 @@ export async function POST(request) {
 
     const promises = expertModels.map(async (model) => {
       try {
-        const prompt = [
-          { role: 'system', content: model.systemPrompt },
-          { role: 'user', content: question }
-        ];
-
         const response = await fetch(model.endpoint, {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${HUGGINGFACE_API_KEY}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://your-app.vercel.app', // ضروري لـ OpenRouter
+            'X-Title': 'Expert Team AI'
           },
           body: JSON.stringify({
-            inputs: prompt,
-            parameters: {
-              max_new_tokens: 1024,
-              temperature: 0.6,
-              return_full_text: false
-            }
+            model: model.model,
+            messages: [
+              { role: 'system', content: model.systemPrompt },
+              { role: 'user', content: question }
+            ],
+            max_tokens: 800
           })
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
+          const error = await response.text();
           throw new Error(`فشل: ${response.status}`);
         }
 
-        const result = await response.json();
-        let answer = '';
-
-        if (Array.isArray(result)) {
-          answer = result[0]?.generated_text || '';
-        } else if (typeof result === 'object' && result.generated_text) {
-          answer = result.generated_text;
-        } else if (typeof result === 'string') {
-          answer = result;
-        }
-
-        answer = answer.replace(/^.*?<\|im_end\|>/, '').trim();
+        const data = await response.json();
+        const answer = data.choices?.[0]?.message?.content?.trim() || 'لم يتمكن النموذج من الرد.';
 
         return {
           id: model.id,
           name: model.name,
           category: model.category,
           color: model.color,
-          answer: answer || 'لم يتمكن النموذج من الرد.'
+          answer
         };
       } catch (err) {
         return {
@@ -75,10 +55,8 @@ export async function POST(request) {
     });
 
     const responses = await Promise.all(promises);
-
     return Response.json({ expertResponses: responses }, { status: 200 });
   } catch (error) {
-    console.error('Error in ask-experts:', error);
     return Response.json({ error: 'فشل الخادم' }, { status: 500 });
   }
-      }
+}
