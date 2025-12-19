@@ -1,7 +1,7 @@
 // /app/page.js
 'use client';
 
-import { useState } from 'react';
+import { useState } from ' prevent user from sending empty question';
 
 export default function Home() {
   const [question, setQuestion] = useState('');
@@ -32,13 +32,13 @@ export default function Home() {
         body: JSON.stringify({ question: question.trim() })
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error || 'فشل في الاتصال بالخبراء');
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'فشل في الاتصال بالخبراء');
       }
 
-      setExpertResponses(data.expertResponses);
+      const data = await res.json();
+      setExpertResponses(data.expertResponses || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -63,13 +63,13 @@ export default function Home() {
         body: JSON.stringify({ question, responses: expertResponses })
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error || 'فشل في التحكيم');
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'فشل في التحكيم');
       }
 
-      setJudgedAnswer(data.judgedAnswer);
+      const data = await res.json();
+      setJudgedAnswer(data.judgedAnswer || '');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -94,13 +94,13 @@ export default function Home() {
         body: JSON.stringify({ question, responses: expertResponses })
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error || 'فشل في توليد الإجماع');
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'فشل في توليد الإجماع');
       }
 
-      setConsensusAnswer(data.consensusAnswer);
+      const data = await res.json();
+      setConsensusAnswer(data.consensusAnswer || '');
     } catch (err) {
       setError(err.message);
     } finally {
